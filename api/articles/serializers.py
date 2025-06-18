@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from api.articles.models import Article
+from api.articles.models import Article, Comment
 from api.users.models import CustomUser
 class ArticleSerializer(serializers.ModelSerializer):
     author = CustomUser()
@@ -11,3 +11,11 @@ class ArticleSerializer(serializers.ModelSerializer):
 
     def get_tagList(self, obj):
         return [tag.name for tag in obj.tags.all()]
+
+# Comment Serializer
+class CommentSerializer(serializers.ModelSerializer):
+    author = serializers.CharField(source="author.username", read_only=True)
+
+    class Meta:
+        model = Comment
+        fields = ["id", "body", "created_at", "updated_at", "author"]
