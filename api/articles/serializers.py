@@ -1,8 +1,8 @@
 from rest_framework import serializers
 from api.articles.models import Article, Comment
-from api.users.models import CustomUser
+
 class ArticleSerializer(serializers.ModelSerializer):
-    author = CustomUser()
+    author = serializers.CharField(source='author.username', read_only=True)
     tagList = serializers.SerializerMethodField()
 
     class Meta:

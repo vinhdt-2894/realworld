@@ -11,6 +11,9 @@ class Article(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     tags = models.ManyToManyField(Tag, related_name='articles')
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='articles')
+    favorited_by = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, related_name='favorite_articles', blank=True
+    )
 
 class Comment(models.Model):
     body = models.TextField()
