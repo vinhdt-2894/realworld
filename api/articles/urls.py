@@ -5,6 +5,7 @@ from .views import (
     ArticleCommentsListCreateView,
     ArticleFeedView,
     ArticleFavoriteView,
+    ArticleCommentDeleteView,
 )
 
 urlpatterns = [
@@ -18,5 +19,10 @@ urlpatterns = [
     ),
     path(
         "<slug:slug>/favorite/", ArticleFavoriteView.as_view(), name="article-favorite"
+    ),
+    path(
+        "<slug:slug>/comments/<int:pk>/",
+        ArticleCommentDeleteView.as_view(),
+        name="comment-delete",
     ),
 ]

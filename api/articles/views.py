@@ -5,6 +5,8 @@ from api.articles.models import Article, Comment
 from api.articles.serializers import ArticleSerializer, CommentSerializer
 from rest_framework import status
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema
+from django.core.exceptions import PermissionDenied
 
 class ArticleListView(generics.ListAPIView):
     queryset = Article.objects.select_related('author').prefetch_related('tags').order_by('-created_at')
@@ -54,24 +56,17 @@ class ArticleDetailView(generics.RetrieveAPIView):
 
 class ArticleCommentsListCreateView(generics.ListCreateAPIView):
     serializer_class = CommentSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
         slug = self.kwargs.get("slug")
         article = generics.get_object_or_404(Article, slug=slug)
         return Comment.objects.filter(article=article).order_by("-created_at")
 
-    def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        serializer = self.get_serializer(queryset, many=True)
-        return Response({"comments": serializer.data})
-
     def perform_create(self, serializer):
         slug = self.kwargs.get("slug")
         article = generics.get_object_or_404(Article, slug=slug)
-        # TODO update this to use the authenticated user
-        from api.users.models import CustomUser
-        author = CustomUser.objects.get(pk=1)
-        serializer.save(article=article, author=author)
+        serializer.save(article=article, author=self.request.user)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -85,7 +80,8 @@ class ArticleFeedView(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        return Article.objects.filter(author=user).order_by('-created_at')
+        following_users = user.following.all()
+        return Article.objects.filter(author__in=following_users).order_by('-created_at')
 
 class ArticleFavoriteView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -103,3 +99,17 @@ class ArticleFavoriteView(APIView):
         article.save()
         serializer = ArticleSerializer(article)
         return Response({"article": serializer.data})
+
+class ArticleCommentDeleteView(generics.DestroyAPIView):
+    serializer_class = CommentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        slug = self.kwargs.get("slug")
+        article = generics.get_object_or_404(Article, slug=slug)
+        return Comment.objects.filter(article=article)
+
+    def perform_destroy(self, instance):
+        if instance.author != self.request.user:
+            raise PermissionDenied("You do not have permission to delete this comment.")
+        instance.delete()
