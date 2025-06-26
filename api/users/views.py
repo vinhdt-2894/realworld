@@ -8,6 +8,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from drf_spectacular.utils import extend_schema
 
 
+@extend_schema(tags=["Users"])
 class ProfileDetailView(generics.RetrieveAPIView):
     queryset = CustomUser.objects.all()
     serializer_class = UserSerializer
@@ -23,6 +24,7 @@ class ProfileDetailView(generics.RetrieveAPIView):
         return Response({"profile": profile})
 
 
+@extend_schema(tags=["Users"])
 class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
 
@@ -48,8 +50,9 @@ class RegisterView(generics.CreateAPIView):
 class LoginView(APIView):
     @extend_schema(
         request=LoginSerializer,
+        tags=["Auth"],
     )
-    def post(self, request):
+    def post(self, request, *args, **kwargs):
         serializer = LoginSerializer(data=request.data.get("user", request.data))
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data["user"]
@@ -67,6 +70,7 @@ class LoginView(APIView):
         )
 
 
+@extend_schema(tags=["Users"])
 class UserRetrieveUpdateView(generics.RetrieveUpdateAPIView):
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -75,7 +79,6 @@ class UserRetrieveUpdateView(generics.RetrieveUpdateAPIView):
         return self.request.user
 
     def get(self, request, *args, **kwargs):
-        print("Retrieving user details")
         serializer = self.get_serializer(self.get_object())
         return Response({"user": serializer.data})
 
@@ -88,12 +91,13 @@ class UserRetrieveUpdateView(generics.RetrieveUpdateAPIView):
         return Response({"user": serializer.data})
 
 
+@extend_schema(tags=["Users"])
 class ProfileFollowView(generics.GenericAPIView):
     queryset = CustomUser.objects.all()
     permission_classes = [permissions.IsAuthenticated]
     lookup_field = "username"
 
-    def post(self, request, username):
+    def post(self, request, *args, **kwargs):
         user_to_follow = self.get_object()
         user_to_follow.followers.add(request.user)
         user_to_follow.save()
@@ -109,7 +113,7 @@ class ProfileFollowView(generics.GenericAPIView):
             status=status.HTTP_200_OK,
         )
 
-    def delete(self, request, username):
+    def delete(self, request, *args, **kwargs):
         user_to_unfollow = self.get_object()
         user_to_unfollow.followers.remove(request.user)
         user_to_unfollow.save()
