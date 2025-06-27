@@ -2,11 +2,51 @@ from rest_framework import generics, permissions, filters
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.response import Response
 from api.articles.models import Article, Comment
-from api.articles.serializers import ArticleSerializer, CommentSerializer
+from api.articles.serializers import (
+    ArticleSerializer,
+    CommentSerializer,
+    ArticleSerializerWithFavorite,
+)
 from rest_framework import status
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
 from django.core.exceptions import PermissionDenied
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
+
+
+def user_cache_key(view_instance, view_method, request, args, kwargs):
+    user_id = request.user.id if request.user.is_authenticated else "anon"
+    return f"user_feed_{user_id}"
+
+
+@method_decorator(cache_page(60 * 5, key_prefix=user_cache_key), name="dispatch")
+@extend_schema(tags=["Articles"])
+class ArticleFeedView(generics.ListAPIView):
+    serializer_class = ArticleSerializerWithFavorite
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        following_users = user.following.all()
+        return Article.objects.filter(author__in=following_users).order_by(
+            "-created_at"
+        )
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        serializer = (
+            self.get_serializer(page, many=True, context={"request": request})
+            if page is not None
+            else self.get_serializer(queryset, many=True, context={"request": request})
+        )
+        data = serializer.data
+        if page is not None:
+            return self.get_paginated_response(
+                {"articles": data, "articlesCount": queryset.count()}
+            )
+        return Response({"articles": data, "articlesCount": queryset.count()})
 
 
 @extend_schema(tags=["Articles"])
@@ -16,7 +56,7 @@ class ArticleListView(generics.ListCreateAPIView):
         .prefetch_related("tags")
         .order_by("-created_at")
     )
-    serializer_class = ArticleSerializer
+    serializer_class = ArticleSerializerWithFavorite
     filter_backends = [
         DjangoFilterBackend,
         filters.SearchFilter,
@@ -38,18 +78,18 @@ class ArticleListView(generics.ListCreateAPIView):
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
-
         page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(
-                {"articles": serializer.data, "articlesCount": queryset.count()}
-            )
-
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(
-            {"articles": serializer.data, "articlesCount": queryset.count()}
+        serializer = (
+            self.get_serializer(page, many=True, context={"request": request})
+            if page is not None
+            else self.get_serializer(queryset, many=True, context={"request": request})
         )
+        data = serializer.data
+        if page is not None:
+            return self.get_paginated_response(
+                {"articles": data, "articlesCount": queryset.count()}
+            )
+        return Response({"articles": data, "articlesCount": queryset.count()})
 
 
 @extend_schema(tags=["Articles"])
@@ -84,19 +124,6 @@ class ArticleCommentsListCreateView(generics.ListCreateAPIView):
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         return Response({"comment": serializer.data}, status=status.HTTP_201_CREATED)
-
-
-@extend_schema(tags=["Articles"])
-class ArticleFeedView(generics.ListAPIView):
-    serializer_class = ArticleSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        user = self.request.user
-        following_users = user.following.all()
-        return Article.objects.filter(author__in=following_users).order_by(
-            "-created_at"
-        )
 
 
 @extend_schema(tags=["Articles"])
